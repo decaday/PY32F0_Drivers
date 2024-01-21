@@ -2810,6 +2810,8 @@ typedef struct
 * @brief Specific device feature definitions
 */
 
+#define RCC_LSE_SUPPORT
+
 /********************  Bit definition for RCC_CR register  *****************/
 #define RCC_CR_HSION_Pos                 (8U)
 #define RCC_CR_HSION_Msk                 (0x1UL << RCC_CR_HSION_Pos)           /*!< 0x00000100 */
@@ -2897,6 +2899,7 @@ typedef struct
 #define RCC_CFGR_SWS_HSI               (0UL)                                   /*!< HSI used as system clock */
 #define RCC_CFGR_SWS_HSE               (0x00000008UL)                          /*!< HSE used as system clock */
 #define RCC_CFGR_SWS_LSI               (0x00000018UL)                          /*!< LSI used as system clock */
+#define RCC_CFGR_SWS_LSE               (0x00000020UL)                          /*!< LSE used as system clock */
 
 /*!< HPRE configuration */
 #define RCC_CFGR_HPRE_Pos              (8U)
@@ -2939,10 +2942,20 @@ typedef struct
 #define RCC_ECSCR_HSE_FREQ_0            (0x1UL <<RCC_ECSCR_HSE_FREQ_Pos)      /*!< 0x00000004 */
 #define RCC_ECSCR_HSE_FREQ_1            (0x2UL <<RCC_ECSCR_HSE_FREQ_Pos)      /*!< 0x00000008 */
 
+/*!< LSE DRIVER configuration */
+#define RCC_ECSCR_LSE_DRIVER_Pos        (16U)
+#define RCC_ECSCR_LSE_DRIVER_Msk        (0x3UL << RCC_ECSCR_LSE_DRIVER_Pos)   /*!< 0x00030000 */
+#define RCC_ECSCR_LSE_DRIVER            RCC_ECSCR_LSE_DRIVER_Msk
+#define RCC_ECSCR_LSE_DRIVER_0          (0x1UL << RCC_ECSCR_LSE_DRIVER_Pos)   /*!< 0x00010000 */
+#define RCC_ECSCR_LSE_DRIVER_1          (0x2UL << RCC_ECSCR_LSE_DRIVER_Pos)   /*!< 0x00020000 */
+
 /********************  Bit definition for RCC_CIER register  ******************/
 #define RCC_CIER_LSIRDYIE_Pos            (0U)
 #define RCC_CIER_LSIRDYIE_Msk            (0x1UL << RCC_CIER_LSIRDYIE_Pos)      /*!< 0x00000001 */
 #define RCC_CIER_LSIRDYIE                RCC_CIER_LSIRDYIE_Msk
+#define RCC_CIER_LSERDYIE_Pos            (1U)
+#define RCC_CIER_LSERDYIE_Msk            (0x1UL << RCC_CIER_LSERDYIE_Pos)      /*!< 0x00000002 */
+#define RCC_CIER_LSERDYIE                RCC_CIER_LSERDYIE_Msk
 #define RCC_CIER_HSIRDYIE_Pos            (3U)
 #define RCC_CIER_HSIRDYIE_Msk            (0x1UL << RCC_CIER_HSIRDYIE_Pos)      /*!< 0x00000008 */
 #define RCC_CIER_HSIRDYIE                RCC_CIER_HSIRDYIE_Msk
@@ -2954,6 +2967,9 @@ typedef struct
 #define RCC_CIFR_LSIRDYF_Pos             (0U)
 #define RCC_CIFR_LSIRDYF_Msk             (0x1UL << RCC_CIFR_LSIRDYF_Pos)       /*!< 0x00000001 */
 #define RCC_CIFR_LSIRDYF                 RCC_CIFR_LSIRDYF_Msk
+#define RCC_CIFR_LSERDYF_Pos             (1U)
+#define RCC_CIFR_LSERDYF_Msk             (0x1UL << RCC_CIFR_LSERDYF_Pos)       /*!< 0x00000002 */
+#define RCC_CIFR_LSERDYF                 RCC_CIFR_LSERDYF_Msk
 #define RCC_CIFR_HSIRDYF_Pos             (3U)
 #define RCC_CIFR_HSIRDYF_Msk             (0x1UL << RCC_CIFR_HSIRDYF_Pos)       /*!< 0x00000008 */
 #define RCC_CIFR_HSIRDYF                 RCC_CIFR_HSIRDYF_Msk
@@ -2963,11 +2979,17 @@ typedef struct
 #define RCC_CIFR_CSSF_Pos                (8U)
 #define RCC_CIFR_CSSF_Msk                (0x1UL << RCC_CIFR_CSSF_Pos)          /*!< 0x00000100 */
 #define RCC_CIFR_CSSF                    RCC_CIFR_CSSF_Msk
+#define RCC_CIFR_LSECSSF_Pos             (9U)
+#define RCC_CIFR_LSECSSF_Msk             (0x1UL << RCC_CIFR_LSECSSF_Pos)       /*!< 0x00000200 */
+#define RCC_CIFR_LSECSSF                 RCC_CIFR_LSECSSF_Msk
 
 /********************  Bit definition for RCC_CICR register  ******************/
 #define RCC_CICR_LSIRDYC_Pos             (0U)
 #define RCC_CICR_LSIRDYC_Msk             (0x1UL << RCC_CICR_LSIRDYC_Pos)       /*!< 0x00000001 */
 #define RCC_CICR_LSIRDYC                 RCC_CICR_LSIRDYC_Msk
+#define RCC_CICR_LSERDYC_Pos             (1U)
+#define RCC_CICR_LSERDYC_Msk             (0x1UL << RCC_CICR_LSERDYC_Pos)       /*!< 0x00000002 */
+#define RCC_CICR_LSERDYC                 RCC_CICR_LSERDYC_Msk
 #define RCC_CICR_HSIRDYC_Pos             (3U)
 #define RCC_CICR_HSIRDYC_Msk             (0x1UL << RCC_CICR_HSIRDYC_Pos)       /*!< 0x00000008 */
 #define RCC_CICR_HSIRDYC                 RCC_CICR_HSIRDYC_Msk
@@ -2977,6 +2999,9 @@ typedef struct
 #define RCC_CICR_CSSC_Pos                (8U)
 #define RCC_CICR_CSSC_Msk                (0x1UL << RCC_CICR_CSSC_Pos)          /*!< 0x00000100 */
 #define RCC_CICR_CSSC                    RCC_CICR_CSSC_Msk
+#define RCC_CICR_LSECSSC_Pos             (9U)
+#define RCC_CICR_LSECSSC_Msk             (0x1UL << RCC_CICR_LSECSSC_Pos)       /*!< 0x00000200 */
+#define RCC_CICR_LSECSSC                 RCC_CICR_LSECSSC_Msk
 
 /********************  Bit definition for RCC_IOPRSTR register  ****************/
 #define RCC_IOPRSTR_GPIOARST_Pos         (0U)
@@ -3148,6 +3173,21 @@ typedef struct
 #define RCC_CCIPR_LPTIMSEL_1            (0x2UL << RCC_CCIPR_LPTIMSEL_Pos)     /*!< 0x00080000 */
 
 /********************  Bit definition for RCC_BDCR register  ******************/
+#define RCC_BDCR_LSEON_Pos               (0U)
+#define RCC_BDCR_LSEON_Msk               (0x1UL << RCC_BDCR_LSEON_Pos)          /*!< 0x00000001 */
+#define RCC_BDCR_LSEON                   RCC_BDCR_LSEON_Msk
+#define RCC_BDCR_LSERDY_Pos              (1U)
+#define RCC_BDCR_LSERDY_Msk              (0x1UL << RCC_BDCR_LSERDY_Pos)         /*!< 0x00000002 */
+#define RCC_BDCR_LSERDY                  RCC_BDCR_LSERDY_Msk
+#define RCC_BDCR_LSEBYP_Pos              (2U)
+#define RCC_BDCR_LSEBYP_Msk              (0x1UL << RCC_BDCR_LSEBYP_Pos)         /*!< 0x00000004 */
+#define RCC_BDCR_LSEBYP                  RCC_BDCR_LSEBYP_Msk
+#define RCC_BDCR_LSECSSON_Pos            (5U)
+#define RCC_BDCR_LSECSSON_Msk            (0x1UL << RCC_BDCR_LSECSSON_Pos)         /*!< 0x00000020 */
+#define RCC_BDCR_LSECSSON                 RCC_BDCR_LSECSSON_Msk
+#define RCC_BDCR_LSECSSD_Pos             (6U)
+#define RCC_BDCR_LSECSSD_Msk             (0x1UL << RCC_BDCR_LSECSSD_Pos)         /*!< 0x00000040 */
+#define RCC_BDCR_LSECSSD                  RCC_BDCR_LSECSSD_Msk
 #define RCC_BDCR_RTCSEL_Pos              (8U)
 #define RCC_BDCR_RTCSEL_Msk              (0x3UL << RCC_BDCR_RTCSEL_Pos)         /*!< 0x00000300 */
 #define RCC_BDCR_RTCSEL                  RCC_BDCR_RTCSEL_Msk
@@ -3162,6 +3202,9 @@ typedef struct
 #define RCC_BDCR_LSCOEN_Pos              (24U)
 #define RCC_BDCR_LSCOEN_Msk              (0x1UL << RCC_BDCR_LSCOEN_Pos)         /*!< 0x01000000 */
 #define RCC_BDCR_LSCOEN                  RCC_BDCR_LSCOEN_Msk
+#define RCC_BDCR_LSCOSEL_Pos             (25U)
+#define RCC_BDCR_LSCOSEL_Msk             (0x1UL << RCC_BDCR_LSCOSEL_Pos)        /*!< 0x02000000 */
+#define RCC_BDCR_LSCOSEL                 RCC_BDCR_LSCOSEL_Msk
 
 /********************  Bit definition for RCC_CSR register  *******************/
 #define RCC_CSR_LSION_Pos                (0U)

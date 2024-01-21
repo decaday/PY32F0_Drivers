@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    system_py32f0xx.h
   * @brief   CMSIS Cortex-M0+ Device Peripheral Access Layer Header File for
-  *                    PY32F0xx Device Series
+    *                    PY32F0xx Device Series
   * @version v1.0.0
   *
   ******************************************************************************
@@ -41,23 +41,15 @@ extern const uint32_t AHBPrescTable[16];  /*!< AHB prescalers table values */
 extern const uint32_t APBPrescTable[8];   /*!< APB prescalers table values */
 extern const uint32_t HSIFreqTable[8];    /*!< HSI frequency table values */
 
-/**
- * Initialize the system
- * @param  none
- * @return none
- * @brief  Setup the microcontroller system.
- *         Initialize the System and update the SystemCoreClock variable.
- */
+/** @addtogroup PY32F0xx_System_Exported_Functions
+  * @{
+  */
+  
 extern void SystemInit(void);
-
-/**
- * Update SystemCoreClock variable
- * @param  none
- * @return none
- * @brief  Updates the SystemCoreClock with current core Clock
- *         retrieved from cpu registers.
- */
 extern void SystemCoreClockUpdate(void);
+/**
+  * @}
+  */
 
 #ifdef __cplusplus
 }

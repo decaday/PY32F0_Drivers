@@ -42,12 +42,15 @@ extern "C" {
   *  application.
   */
 
-#if !defined (PY32F002Ax5) && !defined (PY32F002Bx5) && \
+#if !defined (PY32F001x4) && \
+    !defined (PY32F002Ax5) && !defined (PY32F002Bx5) && \
     !defined (PY32F003x4) && !defined (PY32F003x6) && !defined (PY32F003x8) && \
     !defined (PY32F030x3) && !defined (PY32F030x4) && !defined (PY32F030x6) && !defined (PY32F030x7) && !defined (PY32F030x8) && !defined (PY32F030xx) && \
     !defined (PY32F031x3) && !defined (PY32F031x4) && !defined (PY32F031x6) && !defined (PY32F031x7) && !defined (PY32F031x8) && \
+    !defined (PY32F040x6) && !defined (PY32F040x8) && !defined (PY32F040x9) && !defined (PY32F040xB) && \
     !defined (PY32F071x6) && !defined (PY32F071x8) && !defined (PY32F071x9) && !defined (PY32F071xB) && \
     !defined (PY32F072x6) && !defined (PY32F072x8) && !defined (PY32F072x9) && !defined (PY32F072xB)
+/* #define PY32F001x4  */  /*!< PY32F001x4  Devices (PY32F001x4  microcontrollers where the Flash memory is 16  Kbytes) */
 /* #define PY32F002Ax5 */  /*!< PY32F002Ax5 Devices (PY32F002Ax5 microcontrollers where the Flash memory is 20  Kbytes) */
 /* #define PY32F002Bx5 */  /*!< PY32F002Bx5 Devices (PY32F002Bx5 microcontrollers where the Flash memory is 24  Kbytes) */
 /* #define PY32F003x4  */  /*!< PY32F003x4  Devices (PY32F003x4  microcontrollers where the Flash memory is 16  Kbytes) */
@@ -63,6 +66,10 @@ extern "C" {
 /* #define PY32F031x6  */  /*!< PY32F031x6  Devices (PY32F031x6  microcontrollers where the Flash memory is 32  Kbytes) */
 /* #define PY32F031x7  */  /*!< PY32F031x7  Devices (PY32F031x7  microcontrollers where the Flash memory is 48  Kbytes) */
 /* #define PY32F031x8  */  /*!< PY32F031x8  Devices (PY32F031x8  microcontrollers where the Flash memory is 64  Kbytes) */
+/* #define PY32F040x6  */  /*!< PY32F040x6  Devices (PY32F040x6  microcontrollers where the Flash memory is 32  Kbytes) */
+/* #define PY32F040x8  */  /*!< PY32F040x8  Devices (PY32F040x8  microcontrollers where the Flash memory is 64  Kbytes) */
+/* #define PY32F040x9  */  /*!< PY32F040x9  Devices (PY32F040x9  microcontrollers where the Flash memory is 96  Kbytes) */
+/* #define PY32F040xB  */  /*!< PY32F040xB  Devices (PY32F040xB  microcontrollers where the Flash memory is 128 Kbytes) */
 /* #define PY32F071x6  */  /*!< PY32F071x6  Devices (PY32F071x6  microcontrollers where the Flash memory is 32  Kbytes) */
 /* #define PY32F071x8  */  /*!< PY32F071x8  Devices (PY32F071x8  microcontrollers where the Flash memory is 64  Kbytes) */
 /* #define PY32F071x9  */  /*!< PY32F071x9  Devices (PY32F071x9  microcontrollers where the Flash memory is 96  Kbytes) */
@@ -75,8 +82,9 @@ extern "C" {
 /**  Tip: To avoid modifying this file each time you need to switch between these
   *       devices, you can define the device in your toolchain compiler preprocessor.
   */
-
-#if (defined(PY32F002Ax5))
+#if (defined(PY32F001x4))
+#define PY32F001APRE
+#elif (defined(PY32F002Ax5))
 #define PY32F002APRE
 #elif (defined(PY32F002Bx5))
 #define PY32F002BPRE
@@ -84,6 +92,8 @@ extern "C" {
 #define PY32F030PRE
 #elif (defined(PY32F031x3) || defined(PY32F031x4) || defined(PY32F031x6) || defined(PY32F031x7) || defined(PY32F031x8))
 #define PY32F031PRE
+#elif (defined(PY32F040x6) || defined(PY32F040x8) || defined(PY32F040x9) || defined(PY32F040xB))
+#define PY32F040PRE
 #elif (defined(PY32F003x4) || defined(PY32F003x6) || defined(PY32F003x8))
 #define PY32F003PRE
 #elif (defined(PY32F071x6) || defined(PY32F071x8) || defined(PY32F071x9) || defined(PY32F071xB))
@@ -107,7 +117,9 @@ extern "C" {
 /**
   * @brief Device_Included
   */
-#if defined(PY32F002Ax5)
+#if defined(PY32F001x4)
+#include "py32f001x4.h"
+#elif defined(PY32F002Ax5)
 #include "py32f002ax5.h"
 #elif defined(PY32F002Bx5)
 #include "py32f002bx5.h"
@@ -137,6 +149,14 @@ extern "C" {
 #include "py32f031x7.h"
 #elif defined(PY32F031x8)
 #include "py32f031x8.h"
+#elif defined(PY32F040x6)
+#include "py32f040x6.h"
+#elif defined(PY32F040x8)
+#include "py32f040x8.h"
+#elif defined(PY32F040x9)
+#include "py32f040x9.h"
+#elif defined(PY32F040xB)
+#include "py32f040xB.h"
 #elif defined(PY32F071x6)
 #include "py32f071x6.h"
 #elif defined(PY32F071x8)
@@ -195,6 +215,8 @@ typedef enum
 #define READ_REG(REG)         ((REG))
 
 #define MODIFY_REG(REG, CLEARMASK, SETMASK)  WRITE_REG((REG), (((READ_REG(REG)) & (~(CLEARMASK))) | (SETMASK)))
+
+#define POSITION_VAL(VAL)     (__CLZ(__RBIT(VAL)))
 
 /* Use of interrupt control for register exclusive access */
 /* Atomic 32-bit register access macro to set one or several bits */
@@ -262,11 +284,7 @@ typedef enum
 #endif /* USE_HAL_DRIVER */
 
 #if defined (USE_HAL_DRIVER)
-#if (defined(PY32F071PRE) || defined(PY32F072PRE))
-#include "py32f07x_hal.h"
-#else
 #include "py32f0xx_hal.h"
-#endif /* Device_Included */
 #endif /* USE_HAL_DRIVER */
 
 #endif /* __PY32F0xx_H */

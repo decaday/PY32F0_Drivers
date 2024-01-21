@@ -1,14 +1,15 @@
 ;****************************************************************************** 
-;* @file              : startup_py32f003xx.s
-;* @brief             : PY32F003xx devices vector table for MDK-ARM toolchain.
-;*                      This module performs:
-;*                      - Set the initial SP
-;*                      - Set the initial PC == Reset_Handler
-;*                      - Set the vector table entries with the exceptions ISR address
-;*                      - Branches to __main in the C library (which eventually
-;*                        calls main()).
-;*                      After Reset the CortexM0+ processor is in Thread mode,
-;*                      priority is Privileged, and the Stack is set to Main.
+;* @file    startup_py32f003x8.s
+;* @author  MCU Application Team
+;* @brief   PY32F003xx devices vector table for MDK-ARM toolchain.
+;*          This module performs:
+;*          - Set the initial SP
+;*          - Set the initial PC == Reset_Handler
+;*          - Set the vector table entries with the exceptions ISR address
+;*          - Branches to __main in the C library (which eventually
+;*            calls main()).
+;*          After Reset the CortexM0+ processor is in Thread mode,
+;*          priority is Privileged, and the Stack is set to Main.
 ;****************************************************************************** 
 ;* @attention
 ;*
@@ -23,7 +24,7 @@
 ;* License. You may obtain a copy of the License at:
 ;*                        opensource.org/licenses/BSD-3-Clause
 ;*
-;****************************************************************************** 
+;******************************************************************************
 ;* <<< Use Configuration Wizard in Context Menu >>>
 
 ; Amount of memory (in bytes) allocated for Stack
