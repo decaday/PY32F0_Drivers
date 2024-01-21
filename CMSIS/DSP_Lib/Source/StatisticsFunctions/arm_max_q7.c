@@ -1,177 +1,255 @@
-/* ----------------------------------------------------------------------    
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.    
-*    
-* $Date:        19. March 2015
-* $Revision: 	V.1.4.5  
-*    
-* Project: 	    CMSIS DSP Library    
-* Title:		arm_max_q7.c    
-*    
-* Description:	Maximum value of a Q7 vector.    
-*    
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.   
-* ---------------------------------------------------------------------------- */
-
-#include "arm_math.h"
-
-/**    
- * @ingroup groupStats    
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_max_q7.c
+ * Description:  Maximum value of a Q7 vector
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/**    
- * @addtogroup Max    
- * @{    
+#include "dsp/statistics_functions.h"
+
+/**
+  @ingroup groupStats
  */
 
-
-/**    
- * @brief Maximum value of a Q7 vector.    
- * @param[in]       *pSrc points to the input vector    
- * @param[in]       blockSize length of the input vector    
- * @param[out]      *pResult maximum value returned here    
- * @param[out]      *pIndex index of maximum value returned here    
-  * @return none.    
+/**
+  @addtogroup Max
+  @{
  */
+
+/**
+  @brief         Maximum value of a Q7 vector.
+  @param[in]     pSrc       points to the input vector
+  @param[in]     blockSize  number of samples in input vector
+  @param[out]    pResult    maximum value returned here
+  @param[out]    pIndex     index of maximum value returned here
+ */
+#if defined(ARM_MATH_MVEI) && !defined(ARM_MATH_AUTOVECTORIZE)
+
+#include "arm_helium_utils.h"
+
+static void arm_small_blk_max_q7(
+    const q7_t * pSrc,
+    uint16_t blockSize,
+    q7_t * pResult,
+    uint32_t * pIndex)
+{
+    int32_t        blkCnt;     /* loop counters */
+    q7x16_t        extremValVec = vdupq_n_s8(Q7_MIN);
+    q7_t           maxValue = Q7_MIN;
+    uint8x16_t     indexVec;
+    uint8x16_t     extremIdxVec;
+    mve_pred16_t   p0;
+    uint8_t        extremIdxArr[16];
+
+    indexVec = vidupq_u8(0U, 1);
+
+    blkCnt = blockSize;
+    do {
+        mve_pred16_t    p = vctp8q(blkCnt);
+        q7x16_t         extremIdxVal = vld1q_z_s8(pSrc, p);
+        /*
+         * Get current max per lane and current index per lane
+         * when a max is selected
+         */
+        p0 = vcmpgeq_m(extremIdxVal, extremValVec, p);
+
+        extremValVec = vorrq_m(extremValVec, extremIdxVal, extremIdxVal, p0);
+        /* store per-lane extrema indexes */
+        vst1q_p_u8(extremIdxArr, indexVec, p0);
+
+        indexVec += 16;
+        pSrc += 16;
+        blkCnt -= 16;
+    }
+    while (blkCnt > 0);
+
+
+    /* Get max value across the vector   */
+    maxValue = vmaxvq(maxValue, extremValVec);
+
+    /* set index for lower values to max possible index   */
+    p0 = vcmpgeq(extremValVec, maxValue);
+    extremIdxVec = vld1q_u8(extremIdxArr);
+
+    indexVec = vpselq(extremIdxVec, vdupq_n_u8(blockSize - 1), p0);
+    *pIndex = vminvq_u8(blockSize - 1, indexVec);
+    *pResult = maxValue;
+}
 
 void arm_max_q7(
-  q7_t * pSrc,
-  uint32_t blockSize,
-  q7_t * pResult,
-  uint32_t * pIndex)
+  const q7_t * pSrc,
+        uint32_t blockSize,
+        q7_t * pResult,
+        uint32_t * pIndex)
 {
-#ifndef ARM_MATH_CM0_FAMILY
-  /* Run the below code for Cortex-M4 and Cortex-M3 */
+    int32_t   totalSize = blockSize;
+    const uint16_t sub_blk_sz = UINT8_MAX + 1;
 
-  q7_t maxVal1, maxVal2, out;                    /* Temporary variables to store the output value. */
-  uint32_t blkCnt, outIndex, count;              /* loop counter */
+    if (totalSize <= sub_blk_sz)
+    {
+        arm_small_blk_max_q7(pSrc, blockSize, pResult, pIndex);
+    }
+    else
+    {
+        uint32_t  curIdx = 0;
+        q7_t      curBlkExtr = Q7_MIN;
+        uint32_t  curBlkPos = 0;
+        uint32_t  curBlkIdx = 0;
+        /*
+         * process blocks of 255 elts
+         */
+        while (totalSize >= sub_blk_sz)
+        {
+            const q7_t     *curSrc = pSrc;
 
-  /* Initialise the count value. */
-  count = 0u;
-  /* Initialise the index value to zero. */
-  outIndex = 0u;
+            arm_small_blk_max_q7(curSrc, sub_blk_sz, pResult, pIndex);
+            if (*pResult > curBlkExtr)
+            {
+                /*
+                 * update partial extrema
+                 */
+                curBlkExtr = *pResult;
+                curBlkPos = *pIndex;
+                curBlkIdx = curIdx;
+            }
+            curIdx++;
+            pSrc += sub_blk_sz;
+            totalSize -= sub_blk_sz;
+        }
+        /*
+         * remainder
+         */
+        arm_small_blk_max_q7(pSrc, totalSize, pResult, pIndex);
+        if (*pResult > curBlkExtr)
+        {
+            curBlkExtr = *pResult;
+            curBlkPos = *pIndex;
+            curBlkIdx = curIdx;
+        }
+        *pIndex = curBlkIdx * sub_blk_sz + curBlkPos;
+        *pResult = curBlkExtr;
+    }
+}
+#else
+void arm_max_q7(
+  const q7_t * pSrc,
+        uint32_t blockSize,
+        q7_t * pResult,
+        uint32_t * pIndex)
+{
+        q7_t maxVal, out;                              /* Temporary variables to store the output value. */
+        uint32_t blkCnt, outIndex;                     /* Loop counter */
+
+#if defined (ARM_MATH_LOOPUNROLL)
+        uint32_t index;                                /* index of maximum value */
+#endif
+
+  /* Initialise index value to zero. */
+  outIndex = 0U;
   /* Load first input value that act as reference value for comparision */
   out = *pSrc++;
 
-  /* Loop unrolling */
-  blkCnt = (blockSize - 1u) >> 2u;
+#if defined (ARM_MATH_LOOPUNROLL)
+  /* Initialise index of maximum value. */
+  index = 0U;
 
-  /* Run the below code for Cortex-M4 and Cortex-M3 */
-  while(blkCnt > 0u)
+  /* Loop unrolling: Compute 4 outputs at a time */
+  blkCnt = (blockSize - 1U) >> 2U;
+
+  while (blkCnt > 0U)
   {
-    /* Initialize maxVal to the next consecutive values one by one */
-    maxVal1 = *pSrc++;
-
-    maxVal2 = *pSrc++;
+    /* Initialize maxVal to next consecutive values one by one */
+    maxVal = *pSrc++;
 
     /* compare for the maximum value */
-    if(out < maxVal1)
+    if (out < maxVal)
     {
-      /* Update the maximum value and its index */
-      out = maxVal1;
-      outIndex = count + 1u;
+      /* Update the maximum value and it's index */
+      out = maxVal;
+      outIndex = index + 1U;
     }
 
-    maxVal1 = *pSrc++;
-
-    /* compare for the maximum value */
-    if(out < maxVal2)
+    maxVal = *pSrc++;
+    if (out < maxVal)
     {
-      /* Update the maximum value and its index */
-      out = maxVal2;
-      outIndex = count + 2u;
+      out = maxVal;
+      outIndex = index + 2U;
     }
 
-    maxVal2 = *pSrc++;
-
-    /* compare for the maximum value */
-    if(out < maxVal1)
+    maxVal = *pSrc++;
+    if (out < maxVal)
     {
-      /* Update the maximum value and its index */
-      out = maxVal1;
-      outIndex = count + 3u;
+      out = maxVal;
+      outIndex = index + 3U;
     }
 
-    /* compare for the maximum value */
-    if(out < maxVal2)
+    maxVal = *pSrc++;
+    if (out < maxVal)
     {
-      /* Update the maximum value and its index */
-      out = maxVal2;
-      outIndex = count + 4u;
+      out = maxVal;
+      outIndex = index + 4U;
     }
 
-    count += 4u;
+    index += 4U;
 
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-  /* if (blockSize - 1u) is not multiple of 4 */
-  blkCnt = (blockSize - 1u) % 4u;
+  /* Loop unrolling: Compute remaining outputs */
+  blkCnt = (blockSize - 1U) % 4U;
 
 #else
 
-  /* Run the below code for Cortex-M0 */
-  q7_t maxVal1, out;                             /* Temporary variables to store the output value. */
-  uint32_t blkCnt, outIndex;                     /* loop counter */
+  /* Initialize blkCnt with number of samples */
+  blkCnt = (blockSize - 1U);
 
-  /* Initialise the index value to zero. */
-  outIndex = 0u;
-  /* Load first input value that act as reference value for comparision */
-  out = *pSrc++;
+#endif /* #if defined (ARM_MATH_LOOPUNROLL) */
 
-  blkCnt = (blockSize - 1u);
-
-#endif /* #ifndef ARM_MATH_CM0_FAMILY */
-
-  while(blkCnt > 0u)
+  while (blkCnt > 0U)
   {
     /* Initialize maxVal to the next consecutive values one by one */
-    maxVal1 = *pSrc++;
+    maxVal = *pSrc++;
 
     /* compare for the maximum value */
-    if(out < maxVal1)
+    if (out < maxVal)
     {
       /* Update the maximum value and it's index */
-      out = maxVal1;
+      out = maxVal;
       outIndex = blockSize - blkCnt;
     }
-    /* Decrement the loop counter */
-    blkCnt--;
 
+    /* Decrement loop counter */
+    blkCnt--;
   }
 
-  /* Store the maximum value and its index into destination pointers */
+  /* Store the maximum value and it's index into destination pointers */
   *pResult = out;
   *pIndex = outIndex;
-
 }
+#endif /* defined(ARM_MATH_MVEI) */
 
-/**    
- * @} end of Max group    
+/**
+  @} end of Max group
  */

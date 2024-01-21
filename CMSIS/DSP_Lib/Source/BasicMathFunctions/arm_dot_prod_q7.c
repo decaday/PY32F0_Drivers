@@ -1,101 +1,136 @@
-/* ----------------------------------------------------------------------    
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.    
-*    
-* $Date:        19. March 2015
-* $Revision: 	V.1.4.5
-*    
-* Project: 	    CMSIS DSP Library    
-* Title:		arm_dot_prod_q7.c    
-*    
-* Description:	Q7 dot product.    
-*    
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-* -------------------------------------------------------------------- */
-
-#include "arm_math.h"
-
-/**    
- * @ingroup groupMath    
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_dot_prod_q7.c
+ * Description:  Q7 dot product
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/**    
- * @addtogroup dot_prod    
- * @{    
+#include "dsp/basic_math_functions.h"
+
+/**
+  @ingroup groupMath
  */
 
-/**    
- * @brief Dot product of Q7 vectors.    
- * @param[in]       *pSrcA points to the first input vector    
- * @param[in]       *pSrcB points to the second input vector    
- * @param[in]       blockSize number of samples in each vector    
- * @param[out]      *result output result returned here    
- * @return none.    
- *    
- * <b>Scaling and Overflow Behavior:</b>    
- * \par    
- * The intermediate multiplications are in 1.7 x 1.7 = 2.14 format and these    
- * results are added to an accumulator in 18.14 format.    
- * Nonsaturating additions are used and there is no danger of wrap around as long as    
- * the vectors are less than 2^18 elements long.    
- * The return result is in 18.14 format.    
+/**
+  @addtogroup BasicDotProd
+  @{
  */
+
+/**
+  @brief         Dot product of Q7 vectors.
+  @param[in]     pSrcA      points to the first input vector
+  @param[in]     pSrcB      points to the second input vector
+  @param[in]     blockSize  number of samples in each vector
+  @param[out]    result     output result returned here
+
+  @par           Scaling and Overflow Behavior
+                   The intermediate multiplications are in 1.7 x 1.7 = 2.14 format and these
+                   results are added to an accumulator in 18.14 format.
+                   Nonsaturating additions are used and there is no danger of wrap around as long as
+                   the vectors are less than 2^18 elements long.
+                   The return result is in 18.14 format.
+ */
+
+#if defined(ARM_MATH_MVEI) && !defined(ARM_MATH_AUTOVECTORIZE)
+
+#include "arm_helium_utils.h"
 
 void arm_dot_prod_q7(
-  q7_t * pSrcA,
-  q7_t * pSrcB,
-  uint32_t blockSize,
-  q31_t * result)
+    const q7_t * pSrcA,
+    const q7_t * pSrcB,
+    uint32_t blockSize,
+    q31_t * result)
 {
-  uint32_t blkCnt;                               /* loop counter */
+    uint32_t  blkCnt;           /* loop counters */
+    q7x16_t vecA;
+    q7x16_t vecB;
+    q31_t     sum = 0;
 
-  q31_t sum = 0;                                 /* Temporary variables to store output */
+    /* Compute 16 outputs at a time */
+    blkCnt = blockSize >> 4;
+    while (blkCnt > 0U)
+    {
+        /*
+         * C = A[0]* B[0] + A[1]* B[1] + A[2]* B[2] + .....+ A[blockSize-1]* B[blockSize-1]
+         * Calculate dot product and then store the result in a temporary buffer.
+         */
+        vecA = vld1q(pSrcA);
+        vecB = vld1q(pSrcB);
+        sum = vmladavaq(sum, vecA, vecB);
+        /*
+         * Decrement the blockSize loop counter
+         */
+        blkCnt--;
+        /*
+         * advance vector source and destination pointers
+         */
+        pSrcA += 16;
+        pSrcB += 16;
+    }
+    /*
+     * tail
+     */
+    blkCnt = blockSize & 0xF;
+    if (blkCnt > 0U)
+    {
+        mve_pred16_t p0 = vctp8q(blkCnt);
+        vecA = vld1q(pSrcA);
+        vecB = vld1q(pSrcB);
+        sum = vmladavaq_p(sum, vecA, vecB, p0);
+    }
 
-#ifndef ARM_MATH_CM0_FAMILY
+    *result = sum;
+}
+#else
+void arm_dot_prod_q7(
+  const q7_t * pSrcA,
+  const q7_t * pSrcB,
+        uint32_t blockSize,
+        q31_t * result)
+{
+        uint32_t blkCnt;                               /* Loop counter */
+        q31_t sum = 0;                                 /* Temporary return variable */
 
-/* Run the below code for Cortex-M4 and Cortex-M3 */
+#if defined (ARM_MATH_LOOPUNROLL)
 
-  q31_t input1, input2;                          /* Temporary variables to store input */
-  q31_t inA1, inA2, inB1, inB2;                  /* Temporary variables to store input */
+#if defined (ARM_MATH_DSP)
+  q31_t input1, input2;                          /* Temporary variables */
+  q31_t inA1, inA2, inB1, inB2;                  /* Temporary variables */
+#endif
 
+  /* Loop unrolling: Compute 4 outputs at a time */
+  blkCnt = blockSize >> 2U;
 
-
-  /*loop Unrolling */
-  blkCnt = blockSize >> 2u;
-
-  /* First part of the processing with loop unrolling.  Compute 4 outputs at a time.    
-   ** a second loop below computes the remaining 1 to 3 samples. */
-  while(blkCnt > 0u)
+  while (blkCnt > 0U)
   {
+    /* C = A[0]* B[0] + A[1]* B[1] + A[2]* B[2] + .....+ A[blockSize-1]* B[blockSize-1] */
+
+#if defined (ARM_MATH_DSP)
     /* read 4 samples at a time from sourceA */
-    input1 = *__SIMD32(pSrcA)++;
+    input1 = read_q7x4_ia (&pSrcA);
     /* read 4 samples at a time from sourceB */
-    input2 = *__SIMD32(pSrcB)++;
+    input2 = read_q7x4_ia (&pSrcB);
 
     /* extract two q7_t samples to q15_t samples */
     inA1 = __SXTB16(__ROR(input1, 8));
@@ -109,51 +144,47 @@ void arm_dot_prod_q7(
     /* multiply and accumulate two samples at a time */
     sum = __SMLAD(inA1, inB1, sum);
     sum = __SMLAD(inA2, inB2, sum);
+#else
+    sum += (q31_t) ((q15_t) *pSrcA++ * *pSrcB++);
+    sum += (q31_t) ((q15_t) *pSrcA++ * *pSrcB++);
+    sum += (q31_t) ((q15_t) *pSrcA++ * *pSrcB++);
+    sum += (q31_t) ((q15_t) *pSrcA++ * *pSrcB++);
+#endif
 
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-  /* If the blockSize is not a multiple of 4, compute any remaining output samples here.    
-   ** No loop unrolling is used. */
-  blkCnt = blockSize % 0x4u;
-
-  while(blkCnt > 0u)
-  {
-    /* C = A[0]* B[0] + A[1]* B[1] + A[2]* B[2] + .....+ A[blockSize-1]* B[blockSize-1] */
-    /* Dot product and then store the results in a temporary buffer. */
-    sum = __SMLAD(*pSrcA++, *pSrcB++, sum);
-
-    /* Decrement the loop counter */
-    blkCnt--;
-  }
+  /* Loop unrolling: Compute remaining outputs */
+  blkCnt = blockSize % 0x4U;
 
 #else
-
-  /* Run the below code for Cortex-M0 */
-
-
 
   /* Initialize blkCnt with number of samples */
   blkCnt = blockSize;
 
-  while(blkCnt > 0u)
+#endif /* #if defined (ARM_MATH_LOOPUNROLL) */
+
+  while (blkCnt > 0U)
   {
     /* C = A[0]* B[0] + A[1]* B[1] + A[2]* B[2] + .....+ A[blockSize-1]* B[blockSize-1] */
-    /* Dot product and then store the results in a temporary buffer. */
-    sum += (q31_t) ((q15_t) * pSrcA++ * *pSrcB++);
 
-    /* Decrement the loop counter */
+    /* Calculate dot product and store result in a temporary buffer. */
+//#if defined (ARM_MATH_DSP)
+//    sum  = __SMLAD(*pSrcA++, *pSrcB++, sum);
+//#else
+    sum += (q31_t) ((q15_t) *pSrcA++ * *pSrcB++);
+//#endif
+
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-#endif /* #ifndef ARM_MATH_CM0_FAMILY */
-
-
-  /* Store the result in the destination buffer in 18.14 format */
+  /* Store result in destination buffer in 18.14 format */
   *result = sum;
 }
+#endif /* defined(ARM_MATH_MVEI) */
 
-/**    
- * @} end of dot_prod group    
+/**
+  @} end of BasicDotProd group
  */

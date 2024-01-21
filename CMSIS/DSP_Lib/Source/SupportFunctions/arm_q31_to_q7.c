@@ -1,136 +1,168 @@
-/* ----------------------------------------------------------------------------    
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.    
-*    
-* $Date:        19. March 2015
-* $Revision: 	V.1.4.5  
-*    
-* Project: 	    CMSIS DSP Library    
-* Title:		arm_q31_to_q7.c    
-*    
-* Description:	Converts the elements of the Q31 vector to Q7 vector.    
-*    
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.    
-* ---------------------------------------------------------------------------- */
-
-#include "arm_math.h"
-
-/**    
- * @ingroup groupSupport    
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_q31_to_q7.c
+ * Description:  Converts the elements of the Q31 vector to Q7 vector
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/**    
- * @addtogroup q31_to_x    
- * @{    
+#include "dsp/support_functions.h"
+
+/**
+  @ingroup groupSupport
  */
 
-/**    
- * @brief Converts the elements of the Q31 vector to Q7 vector.    
- * @param[in]       *pSrc points to the Q31 input vector    
- * @param[out]      *pDst points to the Q7 output vector   
- * @param[in]       blockSize length of the input vector    
- * @return none.    
- *    
- * \par Description:    
- *    
- * The equation used for the conversion process is:    
- *   
- * <pre>    
- * 	pDst[n] = (q7_t) pSrc[n] >> 24;   0 <= n < blockSize.     
- * </pre>    
- *   
+/**
+  @addtogroup q31_to_x
+  @{
  */
 
+/**
+  @brief         Converts the elements of the Q31 vector to Q7 vector.
+  @param[in]     pSrc       points to the Q31 input vector
+  @param[out]    pDst       points to the Q7 output vector
+  @param[in]     blockSize  number of samples in each vector
 
+  @par           Details
+                   The equation used for the conversion process is:
+  <pre>
+      pDst[n] = (q7_t) pSrc[n] >> 24;   0 <= n < blockSize.
+  </pre>
+ */
+#if defined(ARM_MATH_MVEI) && !defined(ARM_MATH_AUTOVECTORIZE)
 void arm_q31_to_q7(
-  q31_t * pSrc,
-  q7_t * pDst,
-  uint32_t blockSize)
+  const q31_t * pSrc,
+        q7_t * pDst,
+        uint32_t blockSize)
 {
-  q31_t *pIn = pSrc;                             /* Src pointer */
-  uint32_t blkCnt;                               /* loop counter */
+    uint32_t  blkCnt;           /* loop counters */
+    q31x4x4_t tmp;
+    q15x8_t evVec = { 0 }, oddVec = { 0 };
+    q7x16_t  vecDst = { 0 };
+    q31_t const *pSrcVec;
 
-#ifndef ARM_MATH_CM0_FAMILY
+    pSrcVec = (q31_t const *) pSrc;
+    blkCnt = blockSize >> 4;
+    while (blkCnt > 0U)
+    {
+        tmp = vld4q(pSrcVec);  
+        pSrcVec += 16;
+        /* C = (q7_t) A >> 24 */
+        /* convert from q31 to q7 and then store the results in the destination buffer */
+        /*
+         * narrow and pack evens
+         */
+        evVec = vshrnbq_n_s32(evVec, tmp.val[0], 16);
+        evVec = vshrntq_n_s32(evVec, tmp.val[2], 16);
+        /*
+         * narrow and pack odds
+         */
+        oddVec = vshrnbq_n_s32(oddVec, tmp.val[1], 16);
+        oddVec = vshrntq_n_s32(oddVec, tmp.val[3], 16);
+        /*
+         * narrow & merge
+         */
+        vecDst = vshrnbq_n_s16(vecDst, evVec, 8);
+        vecDst = vshrntq_n_s16(vecDst, oddVec, 8);
 
-  /* Run the below code for Cortex-M4 and Cortex-M3 */
-  q31_t in1, in2, in3, in4;
+        vst1q(pDst, vecDst);    
+        pDst += 16;
+        /*
+         * Decrement the blockSize loop counter
+         */
+        blkCnt--;
+    }
+    /*
+     * tail
+     */
+    blkCnt = blockSize & 0xF;
+    while (blkCnt > 0U)
+    {
+      /* C = (q7_t) (A >> 24) */
+  
+      /* Convert from q31 to q7 and store result in destination buffer */
+      *pDst++ = (q7_t) (*pSrcVec++ >> 24);
+  
+      /* Decrement loop counter */
+      blkCnt--;
+    }
+}
+#else
+void arm_q31_to_q7(
+  const q31_t * pSrc,
+        q7_t * pDst,
+        uint32_t blockSize)
+{
+        uint32_t blkCnt;                               /* Loop counter */
+  const q31_t *pIn = pSrc;                             /* Source pointer */
+
+#if defined (ARM_MATH_LOOPUNROLL)
+
   q7_t out1, out2, out3, out4;
 
-  /*loop Unrolling */
-  blkCnt = blockSize >> 2u;
+  /* Loop unrolling: Compute 4 outputs at a time */
+  blkCnt = blockSize >> 2U;
 
-  /* First part of the processing with loop unrolling.  Compute 4 outputs at a time.    
-   ** a second loop below computes the remaining 1 to 3 samples. */
-  while(blkCnt > 0u)
+  while (blkCnt > 0U)
   {
-    /* C = (q7_t) A >> 24 */
-    /* convert from q31 to q7 and then store the results in the destination buffer */
-    in1 = *pIn++;
-    in2 = *pIn++;
-    in3 = *pIn++;
-    in4 = *pIn++;
+    /* C = (q7_t) (A >> 24) */
 
-    out1 = (q7_t) (in1 >> 24);
-    out2 = (q7_t) (in2 >> 24);
-    out3 = (q7_t) (in3 >> 24);
-    out4 = (q7_t) (in4 >> 24);
+    /* Convert from q31 to q7 and store result in destination buffer */
 
-    *__SIMD32(pDst)++ = __PACKq7(out1, out2, out3, out4);
+    out1 = (q7_t) (*pIn++ >> 24);
+    out2 = (q7_t) (*pIn++ >> 24);
+    out3 = (q7_t) (*pIn++ >> 24);
+    out4 = (q7_t) (*pIn++ >> 24);
+    write_q7x4_ia (&pDst, __PACKq7(out1, out2, out3, out4));
 
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-  /* If the blockSize is not a multiple of 4, compute any remaining output samples here.    
-   ** No loop unrolling is used. */
-  blkCnt = blockSize % 0x4u;
+  /* Loop unrolling: Compute remaining outputs */
+  blkCnt = blockSize % 0x4U;
 
 #else
 
-  /* Run the below code for Cortex-M0 */
-
-  /* Loop over blockSize number of values */
+  /* Initialize blkCnt with number of samples */
   blkCnt = blockSize;
 
-#endif /* #ifndef ARM_MATH_CM0_FAMILY */
+#endif /* #if defined (ARM_MATH_LOOPUNROLL) */
 
-  while(blkCnt > 0u)
+  while (blkCnt > 0U)
   {
-    /* C = (q7_t) A >> 24 */
-    /* convert from q31 to q7 and then store the results in the destination buffer */
+    /* C = (q7_t) (A >> 24) */
+
+    /* Convert from q31 to q7 and store result in destination buffer */
     *pDst++ = (q7_t) (*pIn++ >> 24);
 
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
 
 }
+#endif /* defined(ARM_MATH_MVEI) */
 
-/**    
- * @} end of q31_to_x group    
+/**
+  @} end of q31_to_x group
  */

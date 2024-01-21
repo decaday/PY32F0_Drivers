@@ -1,165 +1,195 @@
-/* ----------------------------------------------------------------------    
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.    
-*    
-* $Date:        19. March 2015
-* $Revision: 	V.1.4.5
-*    
-* Project: 	    CMSIS DSP Library    
-* Title:		arm_offset_f32.c    
-*    
-* Description:	Floating-point vector offset.    
-*    
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.   
-* ---------------------------------------------------------------------------- */
-#include "arm_math.h"
-
-/**        
- * @ingroup groupMath        
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_offset_f32.c
+ * Description:  Floating-point vector offset
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/**        
- * @defgroup offset Vector Offset        
- *        
- * Adds a constant offset to each element of a vector.        
- *        
- * <pre>        
- *     pDst[n] = pSrc[n] + offset,   0 <= n < blockSize.        
- * </pre>        
- *        
- * The functions support in-place computation allowing the source and
- * destination pointers to reference the same memory buffer.
- * There are separate functions for floating-point, Q7, Q15, and Q31 data types.
+#include "dsp/basic_math_functions.h"
+
+/**
+  @ingroup groupMath
  */
 
-/**        
- * @addtogroup offset        
- * @{        
+/**
+  @defgroup BasicOffset Vector Offset
+
+  Adds a constant offset to each element of a vector.
+
+  <pre>
+      pDst[n] = pSrc[n] + offset,   0 <= n < blockSize.
+  </pre>
+
+  The functions support in-place computation allowing the source and
+  destination pointers to reference the same memory buffer.
+  There are separate functions for floating-point, Q7, Q15, and Q31 data types.
  */
 
-/**        
- * @brief  Adds a constant offset to a floating-point vector.        
- * @param[in]  *pSrc points to the input vector        
- * @param[in]  offset is the offset to be added        
- * @param[out]  *pDst points to the output vector        
- * @param[in]  blockSize number of samples in the vector        
- * @return none.        
+/**
+  @addtogroup BasicOffset
+  @{
  */
 
+/**
+  @brief         Adds a constant offset to a floating-point vector.
+  @param[in]     pSrc       points to the input vector
+  @param[in]     offset     is the offset to be added
+  @param[out]    pDst       points to the output vector
+  @param[in]     blockSize  number of samples in each vector
+ */
+
+#if defined(ARM_MATH_MVEF) && !defined(ARM_MATH_AUTOVECTORIZE)
+
+#include "arm_helium_utils.h"
 
 void arm_offset_f32(
-  float32_t * pSrc,
-  float32_t offset,
-  float32_t * pDst,
-  uint32_t blockSize)
+  const float32_t * pSrc,
+        float32_t offset,
+        float32_t * pDst,
+        uint32_t blockSize)
 {
-  uint32_t blkCnt;                               /* loop counter */
+        uint32_t blkCnt;                               /* Loop counter */
 
-#ifndef ARM_MATH_CM0_FAMILY
+    f32x4_t vec1;
+    f32x4_t res;
 
-/* Run the below code for Cortex-M4 and Cortex-M3 */
-  float32_t in1, in2, in3, in4;
+    /* Compute 4 outputs at a time */
+    blkCnt = blockSize >> 2U;
+    while (blkCnt > 0U)
+    {
+        /* C = A + offset */
+ 
+        /* Add offset and then store the results in the destination buffer. */
+        vec1 = vld1q(pSrc);
+        res = vaddq(vec1,offset);
+        vst1q(pDst, res);
 
-  /*loop Unrolling */
-  blkCnt = blockSize >> 2u;
+        /* Increment pointers */
+        pSrc += 4;
+        pDst += 4;
+        
+        /* Decrement the loop counter */
+        blkCnt--;
+    }
 
-  /* First part of the processing with loop unrolling.  Compute 4 outputs at a time.        
-   ** a second loop below computes the remaining 1 to 3 samples. */
-  while(blkCnt > 0u)
+    /* Tail */
+    blkCnt = blockSize & 0x3;
+
+    if (blkCnt > 0U)
+    {
+        mve_pred16_t p0 = vctp32q(blkCnt);
+        vec1 = vld1q((float32_t const *) pSrc);
+        vstrwq_p(pDst, vaddq(vec1, offset), p0);
+    }
+
+
+}
+
+#else
+void arm_offset_f32(
+  const float32_t * pSrc,
+        float32_t offset,
+        float32_t * pDst,
+        uint32_t blockSize)
+{
+        uint32_t blkCnt;                               /* Loop counter */
+
+#if defined(ARM_MATH_NEON_EXPERIMENTAL) && !defined(ARM_MATH_AUTOVECTORIZE)
+    f32x4_t vec1;
+    f32x4_t res;
+
+    /* Compute 4 outputs at a time */
+    blkCnt = blockSize >> 2U;
+
+    while (blkCnt > 0U)
+    {
+        /* C = A + offset */
+ 
+        /* Add offset and then store the results in the destination buffer. */
+        vec1 = vld1q_f32(pSrc);
+        res = vaddq_f32(vec1,vdupq_n_f32(offset));
+        vst1q_f32(pDst, res);
+
+        /* Increment pointers */
+        pSrc += 4;
+        pDst += 4;
+        
+        /* Decrement the loop counter */
+        blkCnt--;
+    }
+
+    /* Tail */
+    blkCnt = blockSize & 0x3;
+
+#else
+#if defined (ARM_MATH_LOOPUNROLL) && !defined(ARM_MATH_AUTOVECTORIZE)
+
+  /* Loop unrolling: Compute 4 outputs at a time */
+  blkCnt = blockSize >> 2U;
+
+  while (blkCnt > 0U)
   {
     /* C = A + offset */
-    /* Add offset and then store the results in the destination buffer. */
-    /* read samples from source */
-    in1 = *pSrc;
-    in2 = *(pSrc + 1);
 
-    /* add offset to input */
-    in1 = in1 + offset;
+    /* Add offset and store result in destination buffer. */
+    *pDst++ = (*pSrc++) + offset;
 
-    /* read samples from source */
-    in3 = *(pSrc + 2);
+    *pDst++ = (*pSrc++) + offset;
 
-    /* add offset to input */
-    in2 = in2 + offset;
+    *pDst++ = (*pSrc++) + offset;
 
-    /* read samples from source */
-    in4 = *(pSrc + 3);
+    *pDst++ = (*pSrc++) + offset;
 
-    /* add offset to input */
-    in3 = in3 + offset;
-
-    /* store result to destination */
-    *pDst = in1;
-
-    /* add offset to input */
-    in4 = in4 + offset;
-
-    /* store result to destination */
-    *(pDst + 1) = in2;
-
-    /* store result to destination */
-    *(pDst + 2) = in3;
-
-    /* store result to destination */
-    *(pDst + 3) = in4;
-
-    /* update pointers to process next samples */
-    pSrc += 4u;
-    pDst += 4u;
-
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-  /* If the blockSize is not a multiple of 4, compute any remaining output samples here.        
-   ** No loop unrolling is used. */
-  blkCnt = blockSize % 0x4u;
+  /* Loop unrolling: Compute remaining outputs */
+  blkCnt = blockSize % 0x4U;
 
 #else
-
-  /* Run the below code for Cortex-M0 */
 
   /* Initialize blkCnt with number of samples */
   blkCnt = blockSize;
 
-#endif /* #ifndef ARM_MATH_CM0_FAMILY */
+#endif /* #if defined (ARM_MATH_LOOPUNROLL) */
+#endif /* #if defined(ARM_MATH_NEON_EXPERIMENTAL) */
 
-  while(blkCnt > 0u)
+  while (blkCnt > 0U)
   {
     /* C = A + offset */
-    /* Add offset and then store the result in the destination buffer. */
+
+    /* Add offset and store result in destination buffer. */
     *pDst++ = (*pSrc++) + offset;
 
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
-}
 
-/**        
- * @} end of offset group        
+}
+#endif /* defined(ARM_MATH_MVEF) && !defined(ARM_MATH_AUTOVECTORIZE) */
+
+/**
+  @} end of BasicOffset group
  */

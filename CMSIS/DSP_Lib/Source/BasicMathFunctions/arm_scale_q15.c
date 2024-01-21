@@ -1,106 +1,160 @@
-/* ----------------------------------------------------------------------    
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.    
-*    
-* $Date:        19. March 2015
-* $Revision: 	V.1.4.5
-*    
-* Project: 	    CMSIS DSP Library    
-* Title:		arm_scale_q15.c    
-*    
-* Description:	Multiplies a Q15 vector by a scalar.    
-*    
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.   
-* -------------------------------------------------------------------- */
-
-#include "arm_math.h"
-
-/**    
- * @ingroup groupMath    
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_scale_q15.c
+ * Description:  Multiplies a Q15 vector by a scalar
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/**    
- * @addtogroup scale    
- * @{    
+#include "dsp/basic_math_functions.h"
+
+/**
+  @ingroup groupMath
  */
 
-/**    
- * @brief Multiplies a Q15 vector by a scalar.    
- * @param[in]       *pSrc points to the input vector    
- * @param[in]       scaleFract fractional portion of the scale value    
- * @param[in]       shift number of bits to shift the result by    
- * @param[out]      *pDst points to the output vector    
- * @param[in]       blockSize number of samples in the vector    
- * @return none.    
- *    
- * <b>Scaling and Overflow Behavior:</b>    
- * \par    
- * The input data <code>*pSrc</code> and <code>scaleFract</code> are in 1.15 format.    
- * These are multiplied to yield a 2.30 intermediate result and this is shifted with saturation to 1.15 format.    
+/**
+  @addtogroup BasicScale
+  @{
  */
 
+/**
+  @brief         Multiplies a Q15 vector by a scalar.
+  @param[in]     pSrc       points to the input vector
+  @param[in]     scaleFract fractional portion of the scale value
+  @param[in]     shift      number of bits to shift the result by
+  @param[out]    pDst       points to the output vector
+  @param[in]     blockSize  number of samples in each vector
+
+  @par           Scaling and Overflow Behavior
+                   The input data <code>*pSrc</code> and <code>scaleFract</code> are in 1.15 format.
+                   These are multiplied to yield a 2.30 intermediate result and this is shifted with saturation to 1.15 format.
+ */
+
+#if defined(ARM_MATH_MVEI) && !defined(ARM_MATH_AUTOVECTORIZE)
+
+#include "arm_helium_utils.h"
 
 void arm_scale_q15(
-  q15_t * pSrc,
-  q15_t scaleFract,
-  int8_t shift,
-  q15_t * pDst,
-  uint32_t blockSize)
+    const q15_t * pSrc,
+    q15_t   scaleFract,
+    int8_t  shift,
+    q15_t * pDst,
+    uint32_t blockSize)
 {
-  int8_t kShift = 15 - shift;                    /* shift to apply after scaling */
-  uint32_t blkCnt;                               /* loop counter */
+    uint32_t  blkCnt;           /* loop counters */
+    q15x8_t vecSrc;
+    q15x8_t vecDst = { 0 };
+    q31x4_t low, high;
 
-#ifndef ARM_MATH_CM0_FAMILY
+    /* Compute 8 outputs at a time */
+    blkCnt = blockSize >> 3;
 
-/* Run the below code for Cortex-M4 and Cortex-M3 */
-  q15_t in1, in2, in3, in4;
-  q31_t inA1, inA2;                              /* Temporary variables */
-  q31_t out1, out2, out3, out4;
+    while (blkCnt > 0U)
+    {
+        /*
+         * C = A * scale
+         * Scale the input and then store the result in the destination buffer.
+         */
+        vecSrc = vld1q(pSrc);
+        low = vmullbq_int(vecSrc, vdupq_n_s16(scaleFract));
+        low = vqshlq_r(low, shift);
+        vecDst = vqshrnbq_n_s32(vecDst,low,15);
+
+        high = vmulltq_int(vecSrc, vdupq_n_s16(scaleFract));
+        high = vqshlq_r(high, shift);
+        vecDst = vqshrntq_n_s32(vecDst,high,15);
+
+        vst1q(pDst, vecDst);
+        /*
+         * Decrement the blockSize loop counter
+         */
+        blkCnt--;
+        /*
+         * advance vector source and destination pointers
+         */
+        pSrc += 8;
+        pDst += 8;
+    }
+    /*
+     * tail
+     */
+    blkCnt = blockSize & 7;
+    if (blkCnt > 0U)
+    {
+        mve_pred16_t p0 = vctp16q(blkCnt);
+        vecSrc = vld1q(pSrc);
+        low = vmullbq_int(vecSrc, vdupq_n_s16(scaleFract));
+        low = vqshlq_r(low, shift);
+        vecDst = vqshrnbq_n_s32(vecDst,low,15);
+
+        high = vmulltq_int(vecSrc, vdupq_n_s16(scaleFract));
+        high = vqshlq_r(high, shift);
+        vecDst = vqshrntq_n_s32(vecDst,high,15);
+        vstrhq_p(pDst, vecDst, p0);
+    }
+
+}
 
 
-  /*loop Unrolling */
-  blkCnt = blockSize >> 2u;
+#else
+void arm_scale_q15(
+  const q15_t *pSrc,
+        q15_t scaleFract,
+        int8_t shift,
+        q15_t *pDst,
+        uint32_t blockSize)
+{
+        uint32_t blkCnt;                               /* Loop counter */
+        int8_t kShift = 15 - shift;                    /* Shift to apply after scaling */
 
-  /* First part of the processing with loop unrolling.  Compute 4 outputs at a time.        
-   ** a second loop below computes the remaining 1 to 3 samples. */
-  while(blkCnt > 0u)
+#if defined (ARM_MATH_LOOPUNROLL)
+#if defined (ARM_MATH_DSP)
+  q31_t inA1, inA2;
+  q31_t out1, out2, out3, out4;                  /* Temporary output variables */
+  q15_t in1, in2, in3, in4;                      /* Temporary input variables */
+#endif
+#endif
+
+#if defined (ARM_MATH_LOOPUNROLL)
+
+  /* Loop unrolling: Compute 4 outputs at a time */
+  blkCnt = blockSize >> 2U;
+
+  while (blkCnt > 0U)
   {
-    /* Reading 2 inputs from memory */
-    inA1 = *__SIMD32(pSrc)++;
-    inA2 = *__SIMD32(pSrc)++;
-
     /* C = A * scale */
-    /* Scale the inputs and then store the 2 results in the destination buffer        
+
+#if defined (ARM_MATH_DSP)
+    /* read 2 times 2 samples at a time from source */
+    inA1 = read_q15x2_ia (&pSrc);
+    inA2 = read_q15x2_ia (&pSrc);
+
+    /* Scale inputs and store result in temporary variables
      * in single cycle by packing the outputs */
     out1 = (q31_t) ((q15_t) (inA1 >> 16) * scaleFract);
-    out2 = (q31_t) ((q15_t) inA1 * scaleFract);
+    out2 = (q31_t) ((q15_t) (inA1      ) * scaleFract);
     out3 = (q31_t) ((q15_t) (inA2 >> 16) * scaleFract);
-    out4 = (q31_t) ((q15_t) inA2 * scaleFract);
+    out4 = (q31_t) ((q15_t) (inA2      ) * scaleFract);
 
     /* apply shifting */
     out1 = out1 >> kShift;
@@ -114,49 +168,44 @@ void arm_scale_q15(
     in3 = (q15_t) (__SSAT(out3, 16));
     in4 = (q15_t) (__SSAT(out4, 16));
 
-    /* store the result to destination */
-    *__SIMD32(pDst)++ = __PKHBT(in2, in1, 16);
-    *__SIMD32(pDst)++ = __PKHBT(in4, in3, 16);
+    /* store result to destination */
+    write_q15x2_ia (&pDst, __PKHBT(in2, in1, 16));
+    write_q15x2_ia (&pDst, __PKHBT(in4, in3, 16));
+#else
+    *pDst++ = (q15_t) (__SSAT(((q31_t) *pSrc++ * scaleFract) >> kShift, 16));
+    *pDst++ = (q15_t) (__SSAT(((q31_t) *pSrc++ * scaleFract) >> kShift, 16));
+    *pDst++ = (q15_t) (__SSAT(((q31_t) *pSrc++ * scaleFract) >> kShift, 16));
+    *pDst++ = (q15_t) (__SSAT(((q31_t) *pSrc++ * scaleFract) >> kShift, 16));
+#endif
 
-    /* Decrement the loop counter */
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-  /* If the blockSize is not a multiple of 4, compute any remaining output samples here.    
-   ** No loop unrolling is used. */
-  blkCnt = blockSize % 0x4u;
-
-  while(blkCnt > 0u)
-  {
-    /* C = A * scale */
-    /* Scale the input and then store the result in the destination buffer. */
-    *pDst++ = (q15_t) (__SSAT(((*pSrc++) * scaleFract) >> kShift, 16));
-
-    /* Decrement the loop counter */
-    blkCnt--;
-  }
+  /* Loop unrolling: Compute remaining outputs */
+  blkCnt = blockSize % 0x4U;
 
 #else
-
-  /* Run the below code for Cortex-M0 */
 
   /* Initialize blkCnt with number of samples */
   blkCnt = blockSize;
 
-  while(blkCnt > 0u)
+#endif /* #if defined (ARM_MATH_LOOPUNROLL) */
+
+  while (blkCnt > 0U)
   {
     /* C = A * scale */
-    /* Scale the input and then store the result in the destination buffer. */
-    *pDst++ = (q15_t) (__SSAT(((q31_t) * pSrc++ * scaleFract) >> kShift, 16));
 
-    /* Decrement the loop counter */
+    /* Scale input and store result in destination buffer. */
+    *pDst++ = (q15_t) (__SSAT(((q31_t) *pSrc++ * scaleFract) >> kShift, 16));
+
+    /* Decrement loop counter */
     blkCnt--;
   }
 
-#endif /* #ifndef ARM_MATH_CM0_FAMILY */
-
 }
+#endif /* defined(ARM_MATH_MVEI) */
 
-/**    
- * @} end of scale group    
+/**
+  @} end of BasicScale group
  */

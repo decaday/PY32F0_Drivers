@@ -1,189 +1,255 @@
-/* ----------------------------------------------------------------------    
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.    
-*    
-* $Date:        19. March 2015
-* $Revision: 	V.1.4.5
-*    
-* Project: 	    CMSIS DSP Library    
-* Title:		arm_cmplx_dot_prod_q15.c    
-*    
-* Description:	Processing function for the Q15 Complex Dot product    
-*    
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.  
-* -------------------------------------------------------------------- */
-
-#include "arm_math.h"
-
-/**    
- * @ingroup groupCmplxMath    
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_cmplx_dot_prod_q15.c
+ * Description:  Processing function for the Q15 Complex Dot product
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/**    
- * @addtogroup cmplx_dot_prod    
- * @{    
+#include "dsp/complex_math_functions.h"
+
+/**
+  @ingroup groupCmplxMath
  */
 
-/**    
- * @brief  Q15 complex dot product    
- * @param  *pSrcA points to the first input vector    
- * @param  *pSrcB points to the second input vector    
- * @param  numSamples number of complex samples in each vector    
- * @param  *realResult real part of the result returned here    
- * @param  *imagResult imaginary part of the result returned here    
- * @return none.    
- *    
- * <b>Scaling and Overflow Behavior:</b>    
- * \par    
- * The function is implemented using an internal 64-bit accumulator.    
- * The intermediate 1.15 by 1.15 multiplications are performed with full precision and yield a 2.30 result.    
- * These are accumulated in a 64-bit accumulator with 34.30 precision.    
- * As a final step, the accumulators are converted to 8.24 format.    
- * The return results <code>realResult</code> and <code>imagResult</code> are in 8.24 format.    
+/**
+  @addtogroup cmplx_dot_prod
+  @{
  */
 
+/**
+  @brief         Q15 complex dot product.
+  @param[in]     pSrcA       points to the first input vector
+  @param[in]     pSrcB       points to the second input vector
+  @param[in]     numSamples  number of samples in each vector
+  @param[out]    realResult  real part of the result returned here
+  @param[out]    imagResult  imaginary part of the result returned her
+
+  @par           Scaling and Overflow Behavior
+                   The function is implemented using an internal 64-bit accumulator.
+                   The intermediate 1.15 by 1.15 multiplications are performed with full precision and yield a 2.30 result.
+                   These are accumulated in a 64-bit accumulator with 34.30 precision.
+                   As a final step, the accumulators are converted to 8.24 format.
+                   The return results <code>realResult</code> and <code>imagResult</code> are in 8.24 format.
+ */
+
+#if defined(ARM_MATH_MVEI) && !defined(ARM_MATH_AUTOVECTORIZE)
 void arm_cmplx_dot_prod_q15(
-  q15_t * pSrcA,
-  q15_t * pSrcB,
-  uint32_t numSamples,
-  q31_t * realResult,
-  q31_t * imagResult)
+  const q15_t * pSrcA,
+  const q15_t * pSrcB,
+        uint32_t numSamples,
+        q31_t * realResult,
+        q31_t * imagResult)
 {
-  q63_t real_sum = 0, imag_sum = 0;              /* Temporary result storage */
-  q15_t a0,b0,c0,d0;
+    int32_t         blkCnt;
+    q63_t           accReal = 0LL;
+    q63_t           accImag = 0LL;
+    q15x8_t         vecSrcA, vecSrcB;
+    q15x8_t         vecSrcC, vecSrcD;
 
-#ifndef ARM_MATH_CM0_FAMILY
+    blkCnt = (numSamples >> 3);
+    blkCnt -= 1;
+    if (blkCnt > 0) {
+        /* should give more freedom to generate stall free code */
+        vecSrcA = vld1q(pSrcA);
+        vecSrcB = vld1q(pSrcB);
+        pSrcA += 8;
+        pSrcB += 8;
 
-  /* Run the below code for Cortex-M4 and Cortex-M3 */
-  uint32_t blkCnt;                               /* loop counter */
+        while (blkCnt > 0) {
 
+            accReal = vmlsldavaq(accReal, vecSrcA, vecSrcB);
+            vecSrcC = vld1q(pSrcA);
+            pSrcA += 8;
 
-  /*loop Unrolling */
-  blkCnt = numSamples >> 2u;
+            accImag = vmlaldavaxq(accImag, vecSrcA, vecSrcB);
+            vecSrcD = vld1q(pSrcB);
+            pSrcB += 8;
 
-  /* First part of the processing with loop unrolling.  Compute 4 outputs at a time.    
-   ** a second loop below computes the remaining 1 to 3 samples. */
-  while(blkCnt > 0u)
+            accReal = vmlsldavaq(accReal, vecSrcC, vecSrcD);
+            vecSrcA = vld1q(pSrcA);
+            pSrcA += 8;
+
+            accImag = vmlaldavaxq(accImag, vecSrcC, vecSrcD);
+            vecSrcB = vld1q(pSrcB);
+            pSrcB += 8;
+            /*
+             * Decrement the blockSize loop counter
+             */
+            blkCnt--;
+        }
+
+        /* process last elements out of the loop avoid the armclang breaking the SW pipeline */
+        accReal = vmlsldavaq(accReal, vecSrcA, vecSrcB);
+        vecSrcC = vld1q(pSrcA);
+
+        accImag = vmlaldavaxq(accImag, vecSrcA, vecSrcB);
+        vecSrcD = vld1q(pSrcB);
+
+        accReal = vmlsldavaq(accReal, vecSrcC, vecSrcD);
+        vecSrcA = vld1q(pSrcA);
+
+        accImag = vmlaldavaxq(accImag, vecSrcC, vecSrcD);
+        vecSrcB = vld1q(pSrcB);
+
+        /*
+         * tail
+         */
+        blkCnt = CMPLX_DIM * (numSamples & 7);
+        do {
+            mve_pred16_t    p = vctp16q(blkCnt);
+
+            pSrcA += 8;
+            pSrcB += 8;
+
+            vecSrcA = vldrhq_z_s16(pSrcA, p);
+            vecSrcB = vldrhq_z_s16(pSrcB, p);
+
+            accReal = vmlsldavaq_p(accReal, vecSrcA, vecSrcB, p);
+            accImag = vmlaldavaxq_p(accImag, vecSrcA, vecSrcB, p);
+
+            blkCnt -= 8;
+        }
+        while ((int32_t) blkCnt > 0);
+    } else {
+        blkCnt = numSamples * CMPLX_DIM;
+        while (blkCnt > 0) {
+            mve_pred16_t    p = vctp16q(blkCnt);
+
+            vecSrcA = vldrhq_z_s16(pSrcA, p);
+            vecSrcB = vldrhq_z_s16(pSrcB, p);
+
+            accReal = vmlsldavaq_p(accReal, vecSrcA, vecSrcB, p);
+            accImag = vmlaldavaxq_p(accImag, vecSrcA, vecSrcB, p);
+
+            /*
+             * Decrement the blkCnt loop counter
+             * Advance vector source and destination pointers
+             */
+            pSrcA += 8;
+            pSrcB += 8;
+            blkCnt -= 8;
+        }
+    }
+    *realResult = asrl(accReal, (14 - 8));
+    *imagResult = asrl(accImag, (14 - 8));
+}
+#else
+void arm_cmplx_dot_prod_q15(
+  const q15_t * pSrcA,
+  const q15_t * pSrcB,
+        uint32_t numSamples,
+        q31_t * realResult,
+        q31_t * imagResult)
+{
+        uint32_t blkCnt;                               /* Loop counter */
+        q63_t real_sum = 0, imag_sum = 0;              /* Temporary result variables */
+        q15_t a0,b0,c0,d0;
+
+#if defined (ARM_MATH_LOOPUNROLL)
+  /* Loop unrolling: Compute 4 outputs at a time */
+  blkCnt = numSamples >> 2U;
+
+  while (blkCnt > 0U)
   {
-      a0 = *pSrcA++;
-      b0 = *pSrcA++;
-      c0 = *pSrcB++;
-      d0 = *pSrcB++;  
-  
-      real_sum += (q31_t)a0 * c0;
-      imag_sum += (q31_t)a0 * d0;
-      real_sum -= (q31_t)b0 * d0;
-      imag_sum += (q31_t)b0 * c0;
-      
-      a0 = *pSrcA++;
-      b0 = *pSrcA++;
-      c0 = *pSrcB++;
-      d0 = *pSrcB++;  
-  
-      real_sum += (q31_t)a0 * c0;
-      imag_sum += (q31_t)a0 * d0;
-      real_sum -= (q31_t)b0 * d0;
-      imag_sum += (q31_t)b0 * c0;
-      
-      a0 = *pSrcA++;
-      b0 = *pSrcA++;
-      c0 = *pSrcB++;
-      d0 = *pSrcB++;  
-  
-      real_sum += (q31_t)a0 * c0;
-      imag_sum += (q31_t)a0 * d0;
-      real_sum -= (q31_t)b0 * d0;
-      imag_sum += (q31_t)b0 * c0;
-      
-      a0 = *pSrcA++;
-      b0 = *pSrcA++;
-      c0 = *pSrcB++;
-      d0 = *pSrcB++;  
-  
-      real_sum += (q31_t)a0 * c0;
-      imag_sum += (q31_t)a0 * d0;
-      real_sum -= (q31_t)b0 * d0;
-      imag_sum += (q31_t)b0 * c0;
+    a0 = *pSrcA++;
+    b0 = *pSrcA++;
+    c0 = *pSrcB++;
+    d0 = *pSrcB++;
 
-      /* Decrement the loop counter */
-      blkCnt--;
+    real_sum += (q31_t)a0 * c0;
+    imag_sum += (q31_t)a0 * d0;
+    real_sum -= (q31_t)b0 * d0;
+    imag_sum += (q31_t)b0 * c0;
+
+    a0 = *pSrcA++;
+    b0 = *pSrcA++;
+    c0 = *pSrcB++;
+    d0 = *pSrcB++;
+
+    real_sum += (q31_t)a0 * c0;
+    imag_sum += (q31_t)a0 * d0;
+    real_sum -= (q31_t)b0 * d0;
+    imag_sum += (q31_t)b0 * c0;
+
+    a0 = *pSrcA++;
+    b0 = *pSrcA++;
+    c0 = *pSrcB++;
+    d0 = *pSrcB++;
+
+    real_sum += (q31_t)a0 * c0;
+    imag_sum += (q31_t)a0 * d0;
+    real_sum -= (q31_t)b0 * d0;
+    imag_sum += (q31_t)b0 * c0;
+
+    a0 = *pSrcA++;
+    b0 = *pSrcA++;
+    c0 = *pSrcB++;
+    d0 = *pSrcB++;
+
+    real_sum += (q31_t)a0 * c0;
+    imag_sum += (q31_t)a0 * d0;
+    real_sum -= (q31_t)b0 * d0;
+    imag_sum += (q31_t)b0 * c0;
+
+    /* Decrement loop counter */
+    blkCnt--;
   }
 
-  /* If the numSamples is not a multiple of 4, compute any remaining output samples here.    
-   ** No loop unrolling is used. */
-  blkCnt = numSamples % 0x4u;
-
-  while(blkCnt > 0u)
-  {
-      a0 = *pSrcA++;
-      b0 = *pSrcA++;
-      c0 = *pSrcB++;
-      d0 = *pSrcB++;  
-  
-      real_sum += (q31_t)a0 * c0;
-      imag_sum += (q31_t)a0 * d0;
-      real_sum -= (q31_t)b0 * d0;
-      imag_sum += (q31_t)b0 * c0;
-
-      /* Decrement the loop counter */
-      blkCnt--;
-  }
+  /* Loop unrolling: Compute remaining outputs */
+  blkCnt = numSamples % 0x4U;
 
 #else
 
-  /* Run the below code for Cortex-M0 */
+  /* Initialize blkCnt with number of samples */
+  blkCnt = numSamples;
 
-  while(numSamples > 0u)
+#endif /* #if defined (ARM_MATH_LOOPUNROLL) */
+
+  while (blkCnt > 0U)
   {
-      a0 = *pSrcA++;
-      b0 = *pSrcA++;
-      c0 = *pSrcB++;
-      d0 = *pSrcB++;  
-  
-      real_sum += a0 * c0;
-      imag_sum += a0 * d0;
-      real_sum -= b0 * d0;
-      imag_sum += b0 * c0;
+    a0 = *pSrcA++;
+    b0 = *pSrcA++;
+    c0 = *pSrcB++;
+    d0 = *pSrcB++;
 
+    real_sum += (q31_t)a0 * c0;
+    imag_sum += (q31_t)a0 * d0;
+    real_sum -= (q31_t)b0 * d0;
+    imag_sum += (q31_t)b0 * c0;
 
-      /* Decrement the loop counter */
-      numSamples--;
+    /* Decrement loop counter */
+    blkCnt--;
   }
 
-#endif /* #ifndef ARM_MATH_CM0_FAMILY */
-
-  /* Store the real and imaginary results in 8.24 format  */
+  /* Store real and imaginary result in 8.24 format  */
   /* Convert real data in 34.30 to 8.24 by 6 right shifts */
   *realResult = (q31_t) (real_sum >> 6);
   /* Convert imaginary data in 34.30 to 8.24 by 6 right shifts */
   *imagResult = (q31_t) (imag_sum >> 6);
 }
+#endif /* defined(ARM_MATH_MVEI) */
 
-/**    
- * @} end of cmplx_dot_prod group    
+/**
+  @} end of cmplx_dot_prod group
  */

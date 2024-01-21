@@ -1,84 +1,69 @@
-/* ----------------------------------------------------------------------     
-* Copyright (C) 2010-2014 ARM Limited. All rights reserved.  
-*     
-* $Date:        19. October 2015
-* $Revision: 	V.1.4.5 a
-*     
-* Project:      CMSIS DSP Library  
-* Title:		arm_sqrt_q31.c     
-*     
-* Description:	Q31 square root function.    
-*     
-* Target Processor: Cortex-M4/Cortex-M3/Cortex-M0
-*  
-* Redistribution and use in source and binary forms, with or without 
-* modification, are permitted provided that the following conditions
-* are met:
-*   - Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   - Redistributions in binary form must reproduce the above copyright
-*     notice, this list of conditions and the following disclaimer in
-*     the documentation and/or other materials provided with the 
-*     distribution.
-*   - Neither the name of ARM LIMITED nor the names of its contributors
-*     may be used to endorse or promote products derived from this
-*     software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
-* COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE. 
-* -------------------------------------------------------------------- */
-#include "arm_math.h"
+/* ----------------------------------------------------------------------
+ * Project:      CMSIS DSP Library
+ * Title:        arm_sqrt_q31.c
+ * Description:  Q31 square root function
+ *
+ * $Date:        23 April 2021
+ * $Revision:    V1.9.0
+ *
+ * Target Processor: Cortex-M and Cortex-A cores
+ * -------------------------------------------------------------------- */
+/*
+ * Copyright (C) 2010-2021 ARM Limited or its affiliates. All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "dsp/fast_math_functions.h"
 #include "arm_common_tables.h"
 
-/**     
- * @ingroup groupFastMath     
+#define Q28QUARTER 0x20000000 
+
+/**
+  @ingroup groupFastMath
  */
 
-/**     
- * @addtogroup SQRT     
- * @{     
+/**
+  @addtogroup SQRT
+  @{
  */
 
-/**    
- * @brief Q31 square root function.    
- * @param[in]   in    input value.  The range of the input value is [0 +1) or 0x00000000 to 0x7FFFFFFF.    
- * @param[out]  *pOut square root of input value.    
- * @return The function returns ARM_MATH_SUCCESS if the input value is positive
- * and ARM_MATH_ARGUMENT_ERROR if the input is negative.  For
- * negative inputs, the function returns *pOut = 0.
+/**
+  @brief         Q31 square root function.
+  @param[in]     in    input value.  The range of the input value is [0 +1) or 0x00000000 to 0x7FFFFFFF
+  @param[out]    pOut  points to square root of input value
+  @return        execution status
+                   - \ref ARM_MATH_SUCCESS        : input value is positive
+                   - \ref ARM_MATH_ARGUMENT_ERROR : input value is negative; *pOut is set to 0
  */
 
 arm_status arm_sqrt_q31(
   q31_t in,
   q31_t * pOut)
 {
-  q31_t number, temp1, bits_val1, var1, signBits1, half;
-  float32_t temp_float1;
-  union
-  {
-      q31_t fracval;
-      float32_t floatval;
-  } tempconv;
-
+  q31_t number, var1, signBits1 ,temp;
+ 
   number = in;
 
   /* If the input is a positive number then compute the signBits. */
-  if(number > 0)
+  if (number > 0)
   {
     signBits1 = __CLZ(number) - 1;
 
     /* Shift by the number of signBits1 */
-    if((signBits1 % 2) == 0)
+    if ((signBits1 % 2) == 0)
     {
       number = number << signBits1;
     }
@@ -87,48 +72,36 @@ arm_status arm_sqrt_q31(
       number = number << (signBits1 - 1);
     }
 
-    /* Calculate half value of the number */
-    half = number >> 1;
-    /* Store the number for later use */
-    temp1 = number;
+    /* Start value for 1/sqrt(x) for the Newton iteration */
+    var1 = sqrt_initial_lut_q31[(number>> 26) - (Q28QUARTER >> 26)];
 
-    /*Convert to float */
-    temp_float1 = number * 4.6566128731e-010f;
-    /*Store as integer */
-    tempconv.floatval = temp_float1;
-    bits_val1 = tempconv.fracval;
-    /* Subtract the shifted value from the magic number to give intial guess */
-    bits_val1 = 0x5f3759df - (bits_val1 >> 1);  /* gives initial guess */
-    /* Store as float */
-    tempconv.fracval = bits_val1;
-    temp_float1 = tempconv.floatval;
-    /* Convert to integer format */
-    var1 = (q31_t) (temp_float1 * 1073741824);
+    /* 0.5 var1 * (3 - number * var1 * var1) */
 
     /* 1st iteration */
-    var1 = ((q31_t) ((q63_t) var1 * (0x30000000 -
-                                     ((q31_t)
-                                      ((((q31_t)
-                                         (((q63_t) var1 * var1) >> 31)) *
-                                        (q63_t) half) >> 31))) >> 31)) << 2;
+
+    temp = ((q63_t) var1 * var1) >> 28;
+    temp = ((q63_t) number * temp) >> 31;
+    temp = 0x30000000 - temp; 
+    var1 = ((q63_t) var1 * temp) >> 29;
+
+    
     /* 2nd iteration */
-    var1 = ((q31_t) ((q63_t) var1 * (0x30000000 -
-                                     ((q31_t)
-                                      ((((q31_t)
-                                         (((q63_t) var1 * var1) >> 31)) *
-                                        (q63_t) half) >> 31))) >> 31)) << 2;
-    /* 3rd iteration */
-    var1 = ((q31_t) ((q63_t) var1 * (0x30000000 -
-                                     ((q31_t)
-                                      ((((q31_t)
-                                         (((q63_t) var1 * var1) >> 31)) *
-                                        (q63_t) half) >> 31))) >> 31)) << 2;
+    temp = ((q63_t) var1 * var1) >> 28;
+    temp = ((q63_t) number * temp) >> 31;
+    temp = 0x30000000 - temp; 
+    var1 = ((q63_t) var1 * temp) >> 29;
+
+    /* 3nd iteration */
+    temp = ((q63_t) var1 * var1) >> 28;
+    temp = ((q63_t) number * temp) >> 31;
+    temp = 0x30000000 - temp; 
+    var1 = ((q63_t) var1 * temp) >> 29;
 
     /* Multiply the inverse square root with the original value */
-    var1 = ((q31_t) (((q63_t) temp1 * var1) >> 31)) << 1;
+    var1 = ((q31_t) (((q63_t) number * var1) >> 28));
 
     /* Shift the output down accordingly */
-    if((signBits1 % 2) == 0)
+    if ((signBits1 % 2) == 0)
     {
       var1 = var1 >> (signBits1 / 2);
     }
@@ -144,10 +117,11 @@ arm_status arm_sqrt_q31(
   else
   {
     *pOut = 0;
+
     return (ARM_MATH_ARGUMENT_ERROR);
   }
 }
 
-/**     
- * @} end of SQRT group     
+/**
+  @} end of SQRT group
  */
