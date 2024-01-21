@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "py32f002b_hal_conf.h"
+#include "py32f0xx_hal_conf.h"
 
 /** @addtogroup PY32F002B_HAL_Driver
   * @{
