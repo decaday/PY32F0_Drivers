@@ -80,4 +80,4 @@ def run(input_folder):
 
 
 # Call the run function, pass in your input file and input folder
-run(r"E:\Projects\41-py32f0-template\Libraries\PY32F0_Drivers\Temp\PY32F002A-STK")
+run(r"E:\Projects\41-py32f0-template\Libraries\PY32F0_Drivers\Temp\PY32F003-STK")
