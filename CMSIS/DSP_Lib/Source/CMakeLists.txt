@@ -16,7 +16,7 @@ option(MVEF "MVEF intrinsics supported" OFF)
 option(MVEI "MVEI intrinsics supported" OFF)
 option(MVEFLOAT16 "Float16 MVE intrinsics supported" OFF)
 option(DISABLEFLOAT16 "Disable building float16 kernels" OFF)
-option(HOST "Build for host" OFF)
+option(HOST "Build for host" ON)
 option(AUTOVECTORIZE "Prefer autovectorizable code to one using C intrinsics" OFF)
 option(LAXVECTORCONVERSIONS "Lax vector conversions" ON)
 
