@@ -4,7 +4,7 @@ PY32F0xx MCU CMSIS, BSP, HAL, LL, Examples
 
 
 
-see template project at [decaday/py32f0_cmake_template](https://github.com/decaday/py32f0_cmake_template)
+## see template project at [decaday/py32f0-cmake](https://github.com/decaday/py32f0-cmake)
 
 docs : [decaday/PY32_Docs](https://github.com/decaday/PY32_Docs)
 
